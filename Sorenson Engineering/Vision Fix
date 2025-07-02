@@ -149,7 +149,7 @@ END_IF
 	 nMaskState := 0;
 		
 END_CASE
-(* run state that cyclically calls these methods so that these filters are constantly being applied to the vision algorithm of the machine*)
+(* run state that cyclically calls these methods so that these filters are constantly being applied to the vision algorithm*)
 CASE nRunState OF
 0:	IF bExecute THEN
 		nRunState := 5;
