@@ -1,106 +1,86 @@
 //// This shows a snippet of how the Meca500 detects and places parts in a pallet
-CASE nMovementState OF
-	0:
-		IF  Execute THEN
-			nMovementState 	:= 5;
-		END_IF
-	5:	//Set part insertion height
-		arr_PartPalletPlacement[3]	:= gvl.stPartRecipe.rPartHeight;
-		nMovementState 		:= 10;
-	10: // Request coordinates for Asycube
-		IF NOT fb_EyeController.pGetPartDone AND GVL.epInputs.udnSystemState = 1 THEN
-			fb_EyeController.mGetPart(TRUE, arrPartOrgPos := arrPartPos);
-		END_IF
-		IF fb_EyeController.pGetPartDone THEN
-			fb_EyeController.pGetPartDone := FALSE;
-			nMovementState 	:= 15;
-		END_IF
-	15: // Translate to Robot's coordinates
-		IF NOT fb_EyeController.pTransformDone THEN
-			fb_EyeController.mCoordinatesTransformation(TRUE, arrPartCoordinates := arrPartPos);	// arrPartPos is original position provided by Asyril
-		END_IF
-		IF fb_EyeController.pTransformDone THEN				// arrGrabPart is translated position
-			arrGrabPart[1]	:= arrPartPos[1];		// Part's position X (with tooling offset)
-			arrGrabPart[2]	:= arrPartPos[2];		// Part's position Y (with tooling offset)
-			arrGrabPart[6]	:= arrPartPos[3];		// Part's position Rz (with tooling offset)
-			fb_EyeController.pTransformDone := FALSE;
-			nMovementState	:= 20;
-		END_IF
-	20:	// Move robot arm to pick up part
-		fbMeca500.mGrabPart(
-			Execute 		:= TRUE,
-			arrGrabPart 	:= arrGrabPart,
-			Error 			=> Error,
-			Done 			=> Done);
-			
-		IF Done THEN
-			nMovementState	:= 25;
-		END_IF
-		IF GVL.Robot1.Inputs.Motion_Status.Paused = 1 THEN
-			GVL.Air_on_off	:= 0;
-		END_IF
-	25: // Move up out of camera's view and check for part's present
-		fbMeca500.mClearPath(
-			Execute			:= TRUE,
-			Error 			=> Error,
-			Done 			=> Done);
-			
-		IF Done AND NOT GVL.PartVacuumed THEN
-			nMovementState 	:= 0;	
-		ELSIF Done THEN
-			nMovementState 	:= 30;
-		END_IF
-	30:	// Move to pallet and drop off part
-		fbMeca500.mInsertPart(
-			Execute			:= TRUE,
-			arrPalletPlacement := arr_PartPalletPlacement,
-			Error 			=> Error,
-			Done 			=> Done);
-			
-		IF Done THEN
-			GVL.Air_on_off 	:= 0;
-			nMovementState 	:= 35;
-		END_IF	
-	35: // A small delay before going back to request a new part position
-		tonDelay(IN := TRUE, PT :=T#0.2S);
-		IF tonDelay.Q THEN
-			nMovementState	:= 40;
-		END_IF
-   40:	// Reset all necessary variables for the next cycle
-   		tonDelay(IN := FALSE);
-        nMovementState 		:= 0;
-		// Decrease arrPalletPlacement[2] by 10
-        arr_PartPalletPlacement[2] 		:= arr_PartPalletPlacement[2] - 10;		// Move to the next pallet hole in the Y-direction (10 mm - Pallet dependence)
-		IF arr_PartPalletPlacement[2] <= -240 THEN								// The last hole in a row is at -240
-			arr_PartPalletPlacement[2] 	:= rInitialY;							// Set the next hole's Y to the initial Y (first column)
-			arr_PartPalletPlacement[1] 	:= arr_PartPalletPlacement[1] - 10;		// Move down to the next row (X-direction)
-			nMovementState 	:= 45;
-		END_IF
-	45:	// Check if the pallet is full
-		nMovementState 		:= 0;	
-		IF arr_PartPalletPlacement[1] <= 70 THEN
-			mMecaMovement 	:= FALSE;
-			nMovementState 	:= 100;
-			bPalletFull 	:= TRUE;
-		END_IF
-	100:
-		IF bPalletFull THEN
-			Execute 		:= FALSE;
-		END_IF
-END_CASE
+SWITCH (movementState):
+    CASE 0:
+        IF Execute is TRUE:
+            movementState = 5
+
+    CASE 5:  // Set part insertion height
+        palletPosition[3] = partHeightFromRecipe
+        movementState = 10
+
+    CASE 10:  // Request coordinates from vision system
+        IF vision.getPartDone is FALSE AND systemState == 1:
+            vision.getPart(arrPartPos)
+        IF vision.getPartDone is TRUE:
+            vision.getPartDone = FALSE
+            movementState = 15
+
+    CASE 15:  // Transform coordinates to robot frame
+        IF vision.transformDone is FALSE:
+            vision.transformCoordinates(arrPartPos)
+        IF vision.transformDone is TRUE:
+            grabPosition.X = arrPartPos[1]
+            grabPosition.Y = arrPartPos[2]
+            grabPosition.Rz = arrPartPos[3]
+            vision.transformDone = FALSE
+            movementState = 20
+
+    CASE 20:  // Move robot to pick up part
+        robot.grabPart(grabPosition)
+        IF robot.Done:
+            movementState = 25
+        IF robot is paused:
+            airControl = OFF
+
+    CASE 25:  // Move up and check if part is held
+        robot.clearPath()
+        IF robot.Done AND partNotHeld:
+            movementState = 0  // Retry
+        ELSE IF robot.Done:
+            movementState = 30
+
+    CASE 30:  // Insert part onto pallet
+        robot.insertPart(palletPosition)
+        IF robot.Done:
+            airControl = OFF
+            movementState = 35
+
+    CASE 35:  // Delay before restarting loop
+        startDelay(0.2 seconds)
+        IF delayComplete:
+            movementState = 40
+
+    CASE 40:  // Prepare for next cycle
+        stopDelay()
+        movementState = 0
+        palletPosition.Y -= 10  // Move to next Y position
+
+        IF palletPosition.Y <= -240:
+            palletPosition.Y = initialY
+            palletPosition.X -= 10  // Move to next row
+            movementState = 45
+
+    CASE 45:  // Check if pallet is full
+        movementState = 0
+        IF palletPosition.X <= 70:
+            stopOperation = TRUE
+            movementState = 100
+            palletFull = TRUE
+
+    CASE 100:  // Stop execution
+        IF palletFull:
+            Execute = FALSE
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //This shows how a part is detected or whether not it has been placed already
 (*  part detected*)
-IF nPartDetected = 1  THEN
-	GVL.PartVacuumed := TRUE;
-ELSE
-	GVL.PartVacuumed := FALSE;
-END_IF
+IF partDetected == 1:
+    PartVacuumed = TRUE
+ELSE:
+    PartVacuumed = FALSE
 
-(*  part placed*)
-IF rAct_Flow <= nFlowThreshold  THEN
-	GVL.Inserted_in_Pallet := TRUE;
-ELSE
-	GVL.Inserted_in_Pallet := FALSE;
-END_IF
-
+// Check if part was placed based on flow rate
+IF actualFlow <= flowThreshold:
+    InsertedInPallet = TRUE
+ELSE:
+    InsertedInPallet = FALSE
