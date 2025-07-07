@@ -51,14 +51,17 @@ SWITCH (movementState):
             movementState = 40
 
     CASE 40:  // Prepare for next cycle
-        stopDelay()
-        movementState = 0
-        palletPosition.Y -= 10  // Move to next Y position
+         stopDelay()
+    movementState = 0
 
-        IF palletPosition.Y <= -240:
-            palletPosition.Y = initialY
-            palletPosition.X -= 10  // Move to next row
-            movementState = 45
+    // Move to next pallet hole in Y-direction
+    palletPosition.Y = palletPosition.Y - 10
+
+    // Check if we've reached the end of the current row
+    IF palletPosition.Y <= -240:
+        palletPosition.Y = initialY        // Reset Y to the first column
+        palletPosition.X = palletPosition.X - 10  // Move to next row (X-direction)
+        movementState = 45
 
     CASE 45:  // Check if pallet is full
         movementState = 0
