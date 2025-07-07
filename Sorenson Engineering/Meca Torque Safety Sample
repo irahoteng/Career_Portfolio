@@ -1,0 +1,19 @@
+6: 	
+			SetTorqueLimits(
+				Joints_Limit 		:= JointTorqueLimits3, //Torque limit exceeded when Meca moving too fast
+				ExternalStatecontrol:= 0,
+				ExternalMove_ID 	:= 0,
+				Robot 				:= GVL.Robot1,
+				Sent 				:= Sent,
+				Buffered 			:= Buffered,
+				Error 				=> Error);
+		7:  
+			SetTorqueLimitCfg(
+				Severity 			:= 4,
+				Mode 				:= 0,
+				ExternalStatecontrol:= 0,
+				ExternalMove_ID 	:= 0,
+				Robot 				:= GVL.Robot1,
+				Sent 				:= Sent,
+				Buffered 			:= Buffered,
+				Error 				=> Error);
